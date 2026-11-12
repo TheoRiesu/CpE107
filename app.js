@@ -89,11 +89,17 @@ function renderGroups(){const mount=$('groupList');$('groupCount').textContent=`
 function updateExpression(){$('userExpression').textContent=expressionFor(state.groups);$('expressionLabel').textContent=state.form==='SOP'?'YOUR SUM OF PRODUCTS':'YOUR PRODUCT OF SUMS';$('mapInstruction').textContent=state.form==='SOP'?'Group adjacent 1s':'Group adjacent 0s';$('mapHelp').textContent=`Click ${state.form==='SOP'?'1':'0'} cells to select a group. Groups may wrap around map edges.`;}
 function changeForm(){state.form=$('formTypeSelect').value;state.groups=[];state.selected.clear();state.optimal=minimize([...targetSet()], [...state.dcs]);$('answerPanel').hidden=true;$('feedback').textContent='';$('feedback').className='feedback';renderGroups();renderMap();updateSelection();}
 function addGroup(){const cells=[...state.selected].sort((a,b)=>a-b);if(!cells.length)return;
-  const size=cells.length, validSize=(size&(size-1))===0, pattern=patternFor(cells), cube=mintermsFor(pattern).sort((a,b)=>a-b);
-  if(!validSize||cube.length!==size||cube.some(m=>!state.selected.has(m))){$('feedback').className='feedback bad';$('feedback').textContent='Those cells do not make one valid K-map group. Choose 1, 2, 4, 8, or 16 adjacent cells.';return;}
-  const target=targetSet();if(cube.some(m=>!target.has(m)&&!state.dcs.has(m))){$('feedback').className='feedback bad';$('feedback').textContent=`A ${state.form==='SOP'?'1':'0'} group can include don’t-cares, but cannot include the opposite value.`;return;}
+  const pattern=patternFor(cells), cube=mintermsFor(pattern).sort((a,b)=>a-b);
+  const target=targetSet();if(cube.some(m=>!target.has(m)&&!state.dcs.has(m))){
+    const added=cube.filter(m=>!state.selected.has(m));
+    $('feedback').className='feedback bad';
+    $('feedback').textContent=added.length?`That group also needs ${added.join(', ')}. Select the full power-of-two group; the added cells must be ${state.form==='SOP'?'1s':'0s'} or don’t-cares.`:`A ${state.form==='SOP'?'1':'0'} group can include don’t-cares, but cannot include the opposite value.`;return;
+  }
   if(state.groups.some(g=>g.pattern===pattern)){ $('feedback').className='feedback bad';$('feedback').textContent='That group is already in your expression.';return; }
-  state.groups.push({pattern,cells:cube,term:termFor(pattern)});state.selected.clear();$('feedback').textContent='';$('feedback').className='feedback';renderGroups();renderMap();updateSelection();
+  state.groups.push({pattern,cells:cube,term:termFor(pattern)});state.selected.clear();
+  $('feedback').className=cube.length>cells.length?'feedback good':'feedback';
+  $('feedback').textContent=cube.length>cells.length?`Added the full ${cube.length}-cell group, including the wraparound cells.`:'';
+  renderGroups();renderMap();updateSelection();
 }
 function minimize(ones,dcs){
   if(!ones.length)return [];
