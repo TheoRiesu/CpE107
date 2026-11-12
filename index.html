@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4f0">
+  <title>TheoRies Testing — K-map practice</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#k-maps" aria-label="TheoRies Testing home"><span class="brand-mark">T</span> TheoRies Testing</a>
+    <nav class="site-tabs" aria-label="Study tools" role="tablist">
+      <button class="site-tab active" id="kMapsTab" type="button" role="tab" aria-selected="true">K-Maps</button>
+      <button class="site-tab" id="quineTab" type="button" role="tab" aria-selected="false">Quine <span class="work-badge">W.I.P</span></button>
+    </nav>
+    <span class="top-note">A quiet place to work it out.</span>
+    <button class="text-button" id="resetButton" type="button">Reset problem</button>
+  </header>
+
+  <main>
+    <div id="kmapView" role="tabpanel" aria-labelledby="kMapsTab">
+    <section class="intro" id="k-maps">
+      <p class="eyebrow">DIGITAL LOGIC · PRACTICE</p>
+      <h1>Make the map.<br><em>Find the pattern.</em></h1>
+      <p class="intro-copy">Enter a Boolean function, group its K-map, and see whether your expression is minimal.</p>
+    </section>
+
+    <section class="problem-card" aria-labelledby="problemTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">01 / YOUR PROBLEM</p><h2 id="problemTitle">Set up the function</h2></div>
+        <button class="text-button" id="exampleButton" type="button">Load slide example ↗</button>
+      </div>
+      <div class="form-grid">
+        <label>Variables <span class="hint">comma separated, in bit order</span>
+          <input id="variablesInput" value="A, B, C, D" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Output is 1 for minterms <span class="hint">comma separated</span>
+          <input id="mintermsInput" value="0, 2, 5, 7, 8, 10, 13, 15" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Don’t-care terms <span class="hint">optional</span>
+          <input id="dontcaresInput" placeholder="e.g. 1, 9" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Minimize as <span class="hint">choose the form</span>
+          <select id="formTypeSelect"><option value="SOP">Sum of products (SOP)</option><option value="POS">Product of sums (POS)</option></select>
+        </label>
+      </div>
+      <div class="layout-controls" id="layoutControls" hidden>
+        <div class="layout-title"><div><span class="tiny-label">FIVE-VARIABLE MAP</span><strong>Customize the map format</strong></div><span class="layout-note">Use your class’s variable placement</span></div>
+        <div class="layout-fields">
+          <label>Row variables <span class="layout-selects" id="rowVariableSelects"></span></label>
+          <label>Column variables <span class="layout-selects" id="columnVariableSelects"></span></label>
+          <label>Diagonal variable <select id="splitVariableSelect"></select></label>
+          <label>Upper-left triangle means <select id="upperValueSelect"><option value="0">0</option><option value="1">1</option></select></label>
+        </div>
+        <p class="layout-message" id="layoutMessage">Rows and columns use Gray-code order.</p>
+      </div>
+      <div class="form-footer"><p id="inputMessage" class="input-message" aria-live="polite">Four variables · 16 map cells</p><button class="button button-dark" id="buildButton" type="button">Build my map <span>→</span></button></div>
+    </section>
+
+    <section class="workspace" aria-label="Karnaugh map workspace">
+      <div class="map-panel panel">
+        <div class="panel-heading"><div><p class="eyebrow">02 / YOUR K-MAP</p><h2 id="mapInstruction">Group adjacent 1s</h2></div><span class="map-caption" id="mapCaption">Gray-code order</span></div>
+        <div class="map-legend"><span><i class="legend-dot one"></i>1 minterm</span><span><i class="legend-dot zero"></i>0</span><span><i class="legend-dot dc"></i>don’t-care</span></div>
+        <div class="map-scroll"><div id="mapMount"></div></div>
+        <div class="map-help"><span class="help-icon">i</span><span id="mapHelp">Click cells to select a group. Groups may wrap around map edges.</span></div>
+      </div>
+
+      <aside class="work-panel panel">
+        <div class="panel-heading"><div><p class="eyebrow">03 / YOUR GROUPS</p><h2>Build your expression</h2></div><span class="group-count" id="groupCount">0 groups</span></div>
+        <div class="selection-box"><div><span class="tiny-label">SELECTED CELLS</span><strong id="selectionReadout">None yet</strong></div><button class="button button-soft" id="addGroupButton" type="button" disabled>Add group +</button></div>
+        <div id="groupList" class="group-list"><div class="empty-state">Select a power-of-two group of adjacent cells on the map, then add it here.</div></div>
+        <div class="expression-box"><span class="tiny-label" id="expressionLabel">YOUR SUM OF PRODUCTS</span><div id="userExpression" class="expression">—</div></div>
+        <button class="button button-outline check-button" id="checkButton" type="button">Check my answer <span>→</span></button>
+        <div id="feedback" class="feedback" aria-live="polite"></div>
+      </aside>
+    </section>
+
+    <section class="answer-panel panel" id="answerPanel" hidden>
+      <div class="answer-icon">✳</div>
+      <div class="answer-content"><p class="eyebrow">MINIMUM SOLUTION</p><h2 id="answerTitle">A smallest expression</h2><div id="optimalExpression" class="expression optimal-expression"></div><p id="answerDetail" class="answer-detail"></p></div>
+    </section>
+    </div>
+
+    <section class="quine-view panel" id="quineView" role="tabpanel" aria-labelledby="quineTab" hidden>
+      <p class="eyebrow">COMING SOON · W.I.P</p>
+      <h1>Quine–McCluskey</h1>
+      <p class="quine-copy">A step-by-step minimization workspace is in progress. It will show how minterms combine into prime implicants and how the minimum cover is chosen.</p>
+      <div class="quine-steps"><span>01 <b>Group minterms</b></span><span>02 <b>Combine terms</b></span><span>03 <b>Choose a cover</b></span></div>
+      <button class="button button-dark" id="backToMapsButton" type="button">Back to K-Maps <span>→</span></button>
+    </section>
+
+    <footer><span>THEORIES TESTING <span class="footer-dot">·</span> LEARN BY GROUPING</span><span>Built for curious minds.</span></footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
