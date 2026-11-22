@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const gray = (bits) => Array.from({ length: 1 << bits }, (_, n) => n ^ (n >> 1));
-const state = { vars: ['A','B','C','D'], ones: new Set(), dcs: new Set(), selected: new Set(), groups: [], activeGroup: null, optimal: null, layout: null, form: 'SOP' };
+const state = { vars: ['A','B','C','D'], ones: new Set(), dcs: new Set(), selected: new Set(), groups: [], activeGroup: null, activeOptimal: null, optimal: null, layout: null, form: 'SOP' };
 const colors = ['#557b68','#c27b4e','#7185a5','#9a789f','#89934f','#bb6b68','#5d9691','#b28d52'];
 
 function parseList(text, max) {
@@ -66,11 +66,12 @@ function renderMap() {
     button.classList.add(value==='1'?'value-1':value==='X'?'value-x':'value-0');if(state.selected.has(m))button.classList.add('selected');
     if(groupIndexes.length){button.classList.add('grouped');button.style.setProperty('--group-color',colors[groupIndex%colors.length]);}
     if(state.activeGroup!==null){button.classList.add(groupIndexes.includes(state.activeGroup)?'group-highlight':'group-dim');if(groupIndexes.includes(state.activeGroup))button.style.setProperty('--group-color',colors[state.activeGroup%colors.length]);}
+    if(state.activeOptimal!==null&&state.optimal?.[state.activeOptimal]){const optimalCells=state.optimal[state.activeOptimal].cells;button.classList.add(optimalCells.includes(m)?'optimal-highlight':'optimal-dim');}
     if(splitFive)button.classList.add(`half-${half}`);
     button.setAttribute('aria-label',`Minterm ${m}${splitFive?`, ${state.layout.split}=${half==='upper'?state.layout.upperValue:1-Number(state.layout.upperValue)}`:''}: ${value==='X'?'don’t-care':value}`);
     const val=document.createElement('span');val.className='cell-value';val.textContent=value;const idx=document.createElement('span');idx.className='cell-index';idx.textContent=m;button.append(val,idx);
     if(groupIndexes.length>1){const markers=document.createElement('span');markers.className='group-markers';markers.setAttribute('aria-hidden','true');groupIndexes.forEach(i=>{const dot=document.createElement('i');dot.style.background=colors[i%colors.length];markers.append(dot);});button.append(markers);}
-    button.addEventListener('click',()=>{state.activeGroup=null;if(state.selected.has(m))state.selected.delete(m);else state.selected.add(m);renderMap();renderGroups();updateSelection();});return button;};
+    button.addEventListener('click',()=>{state.activeGroup=null;state.activeOptimal=null;if(state.selected.has(m))state.selected.delete(m);else state.selected.add(m);renderMap();renderGroups();updateSelection();});return button;};
   const body=document.createElement('tbody');
   rowCodes.forEach(rowCode=>{const row=document.createElement('tr');const label=document.createElement('th');label.className='axis-label';label.textContent=rowCode.toString(2).padStart(rb,'0');row.append(label);
     colCodes.forEach(colCode=>{const td=document.createElement('td');
@@ -129,11 +130,12 @@ function checkAnswer(){if(!state.optimal){$('feedback').className='feedback bad'
   const isOptimal=state.groups.length===bestTerms&&myLits===optLits;
   $('feedback').className=`feedback ${isOptimal?'good':'bad'}`;
   $('feedback').textContent=isOptimal?`Correct — your expression is minimum (fewest terms, then fewest literals).`:'Your expression works, but it can be simplified further. Compare it with the minimum solution below.';
-  $('answerPanel').hidden=false;$('answerTitle').textContent=isOptimal?'You found a minimum expression':'A smaller expression is possible';$('optimalExpression').textContent=expressionFor(state.optimal);$('answerDetail').textContent=`${bestTerms} ${state.form==='SOP'?'product':'sum'} term${bestTerms===1?'':'s'} · ${optLits} literal${optLits===1?'':'s'} · minimum ${state.form==='SOP'?'sum of products':'product of sums'}`;
+  $('answerPanel').hidden=false;$('answerTitle').textContent=isOptimal?'You found a minimum expression':'A smaller expression is possible';renderOptimalExpression();$('answerDetail').textContent=`${bestTerms} ${state.form==='SOP'?'product':'sum'} term${bestTerms===1?'':'s'} · ${optLits} literal${optLits===1?'':'s'} · minimum ${state.form==='SOP'?'sum of products':'product of sums'}`;
 }
+function renderOptimalExpression(){const mount=$('optimalExpression');mount.replaceChildren();state.optimal.forEach((group,i)=>{if(i){const join=document.createElement('span');join.className='expression-join';join.textContent=state.form==='POS'?' · ':' + ';mount.append(join);}const term=document.createElement('button');term.type='button';term.className=`optimal-term${state.activeOptimal===i?' active':''}`;term.textContent=group.term;term.setAttribute('aria-pressed',String(state.activeOptimal===i));term.setAttribute('aria-label',`Highlight ${group.term} on the K-map`);term.addEventListener('click',()=>{state.activeOptimal=state.activeOptimal===i?null:i;renderMap();renderOptimalExpression();});mount.append(term);});if(!state.optimal.length)mount.textContent=state.form==='POS'?'1':'0';}
 function build(){try{const vars=$('variablesInput').value.split(/[\s,]+/).filter(Boolean);if(vars.length<2||vars.length>5)throw new Error('Use 2 to 5 variables.');if(vars.some(v=>!/^[A-Za-z][A-Za-z0-9_]*$/.test(v))||new Set(vars.map(v=>v.toLowerCase())).size!==vars.length)throw new Error('Use distinct variable names, such as A, B, C, D.');
   const max=2**vars.length,ones=parseList($('mintermsInput').value,max),dcs=parseList($('dontcaresInput').value,max);if(ones.some(x=>dcs.includes(x)))throw new Error('A minterm cannot also be a don’t-care.');
-  state.vars=vars;state.form=$('formTypeSelect').value;renderLayoutControls(vars,true);state.ones=new Set(ones);state.dcs=new Set(dcs);state.selected.clear();state.groups=[];state.optimal=minimize([...targetSet()],dcs);
+  state.vars=vars;state.form=$('formTypeSelect').value;renderLayoutControls(vars,true);state.ones=new Set(ones);state.dcs=new Set(dcs);state.selected.clear();state.groups=[];state.activeGroup=null;state.activeOptimal=null;state.optimal=minimize([...targetSet()],dcs);
   $('inputMessage').className='input-message';$('inputMessage').textContent=`${vars.length} variables · ${max} map cells${dcs.length?` · ${dcs.length} don’t-care${dcs.length===1?'':'s'}`:''}`;$('feedback').textContent='';$('feedback').className='feedback';$('answerPanel').hidden=true;renderMap();renderGroups();updateSelection();
  }catch(e){$('inputMessage').className='input-message error';$('inputMessage').textContent=e.message;}}
 function reset(){ $('variablesInput').value='A, B, C, D';$('mintermsInput').value='0, 2, 5, 7, 8, 10, 13, 15';$('dontcaresInput').value='';build(); }
