@@ -13,6 +13,7 @@
     <nav class="site-tabs" aria-label="Study tools" role="tablist">
       <button class="site-tab active" id="kMapsTab" type="button" role="tab" aria-selected="true">K-Maps</button>
       <button class="site-tab" id="quineTab" type="button" role="tab" aria-selected="false">Quine</button>
+      <button class="site-tab" id="booleanTab" type="button" role="tab" aria-selected="false">Boolean Algebra</button>
     </nav>
     <span class="top-note">A quiet place to work it out.</span>
     <button class="text-button" id="resetButton" type="button">Reset problem</button>
@@ -91,9 +92,28 @@
       <div class="quine-bottom"><button class="button button-outline" id="quineResetButton" type="button">Start over</button><button class="text-button" id="backToMapsButton" type="button">Back to K-Maps →</button></div>
     </section>
 
+    <section class="boolean-view" id="booleanView" role="tabpanel" aria-labelledby="booleanTab" hidden>
+      <section class="boolean-intro">
+        <div><p class="eyebrow">DIGITAL LOGIC · QUICK PRACTICE</p><h1>Boolean algebra</h1><p>Reduce a randomly generated expression, then check whether your answer is equivalent and uses the fewest SOP terms and literals.</p></div>
+        <span class="practice-chip">3 variables · Sum of products</span>
+      </section>
+      <section class="boolean-card panel" aria-labelledby="booleanPromptTitle">
+        <div class="section-heading"><div><p class="eyebrow">01 / SIMPLIFY</p><h2 id="booleanPromptTitle">Your expression</h2></div><button class="text-button" id="newBooleanProblem" type="button">New expression ↻</button></div>
+        <p class="boolean-hint">Use <b>+</b> for OR, <b>·</b> or adjacency for AND, and <b>'</b> after a variable for NOT.</p>
+        <div class="boolean-expression" id="booleanPrompt" aria-label="Expression to simplify"></div>
+        <label class="boolean-answer-label" for="booleanAnswer">Your simplified answer</label>
+        <input id="booleanAnswer" class="boolean-answer" type="text" placeholder="e.g. A'B + C" autocomplete="off" spellcheck="false" aria-describedby="booleanSyntaxHint">
+        <p class="boolean-syntax" id="booleanSyntaxHint">Parentheses and * for AND are also accepted.</p>
+        <div class="boolean-controls"><p class="input-message" id="booleanFeedback" aria-live="polite">Simplify the expression, then check your answer.</p><button class="button button-dark" id="checkBooleanAnswer" type="button">Check my answer <span>→</span></button></div>
+        <div class="boolean-result" id="booleanResult" hidden></div>
+      </section>
+      <section class="boolean-guide panel"><span class="guide-icon">i</span><div><h2>How scoring works</h2><p>A correct answer must match the expression for every input combination. Among equivalent SOP answers, the most efficient uses the fewest product terms; ties are broken by the fewest literals.</p></div></section>
+    </section>
+
     <footer><span>THEORIES TESTING <span class="footer-dot">·</span> LEARN BY GROUPING</span><span>Built for curious minds.</span></footer>
   </main>
   <script src="app.js"></script>
   <script src="quine.js"></script>
+  <script src="boolean.js"></script>
 </body>
 </html>
