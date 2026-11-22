@@ -10,7 +10,8 @@
     while (i < text.length) {
       if (/\s/.test(text[i])) { i++; continue; }
       const rest = text.slice(i);
-      const name = rest.match(/^[A-Za-z][A-Za-z0-9_]*/);
+      // Variables are single letters, so adjacency such as AB means A AND B.
+      const name = rest.match(/^[A-Za-z]/);
       if (name) { tokens.push({ type: 'name', value: name[0] }); i += name[0].length; continue; }
       if (text[i] === '0' || text[i] === '1') { tokens.push({ type: 'constant', value: Number(text[i]) }); i++; continue; }
       const symbols = { '+': 'or', '|': 'or', '·': 'and', '.': 'and', '*': 'and', '&': 'and', '(': 'left', ')': 'right', "'": 'not', '!': 'prefixNot', '~': 'prefixNot' };
