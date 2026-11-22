@@ -1,6 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const q = { vars: [], ones: [], dcs: [], round: 0, rounds: [], selected: [], used: new Set(), primes: [], chosen: new Set(), history: [] };
+  const q = { vars: [], ones: [], dcs: [], round: 0, rounds: [], selected: [], used: new Set(), primes: [], chosen: new Set(), history: [], optimal: null, revealOptimal: false };
   let nextId = 0;
   const termBits = (n) => n.toString(2).padStart(q.vars.length, '0');
   const termName = (bits) => [...bits].map((b, i) => b === '-' ? '' : b === '1' ? q.vars[i] : `${q.vars[i]}'`).filter(Boolean).join('') || '1';
@@ -78,27 +78,89 @@
     $('quineStep1').classList.toggle('current', q.round === 0);
     $('quineStep2').classList.toggle('current', q.round > 0);
   };
+  const findMinimumCover = () => {
+    const candidates = q.primes.map((prime) => ({
+      prime,
+      literals: [...prime.bits].filter((bit) => bit !== '-').length,
+      mask: q.ones.reduce((mask, minterm, index) => prime.covers.includes(minterm) ? mask | (1n << BigInt(index)) : mask, 0n)
+    })).filter((candidate) => candidate.mask !== 0n);
+    const full = (1n << BigInt(q.ones.length)) - 1n;
+    let best = null;
+    const greedy = [];
+    let greedyMask = 0n;
+    while (greedyMask !== full) {
+      const next = candidates.filter((candidate) => !greedy.includes(candidate)).sort((a, b) => {
+        const aGain = bitCount(a.mask & ~greedyMask), bGain = bitCount(b.mask & ~greedyMask);
+        return bGain - aGain || a.literals - b.literals;
+      })[0];
+      if (!next || (next.mask & ~greedyMask) === 0n) break;
+      greedy.push(next); greedyMask |= next.mask;
+    }
+    if (greedyMask === full) best = { candidates: greedy, literals: greedy.reduce((sum, item) => sum + item.literals, 0) };
+    const memo = new Map();
+    const search = (covered, picked, literals) => {
+      if (covered === full) {
+        if (!best || picked.length < best.candidates.length || (picked.length === best.candidates.length && literals < best.literals)) best = { candidates: [...picked], literals };
+        return;
+      }
+      if (best && picked.length >= best.candidates.length) return;
+      const previous = memo.get(covered);
+      if (previous && (previous.count < picked.length || (previous.count === picked.length && previous.literals <= literals))) return;
+      memo.set(covered, { count: picked.length, literals });
+      const missing = full & ~covered;
+      let fewest = null;
+      for (let i = 0; i < q.ones.length; i++) {
+        const bit = 1n << BigInt(i);
+        if ((missing & bit) === 0n) continue;
+        const options = candidates.filter((candidate) => (candidate.mask & bit) !== 0n && (candidate.mask & missing) !== 0n);
+        if (fewest === null || options.length < fewest.length) fewest = options;
+        if (fewest?.length === 1) break;
+      }
+      if (!fewest?.length) return;
+      fewest.sort((a, b) => bitCount(b.mask & missing) - bitCount(a.mask & missing) || a.literals - b.literals);
+      for (const candidate of fewest) search(covered | candidate.mask, [...picked, candidate], literals + candidate.literals);
+    };
+    search(0n, [], 0);
+    return best ? { ids: new Set(best.candidates.map((candidate) => candidate.prime.id)), literals: best.literals } : { ids: new Set(), literals: 0 };
+  };
+  const bitCount = (value) => { let count = 0; while (value) { value &= value - 1n; count++; } return count; };
   const renderCover = () => {
     const primes = q.primes;
+    const selected = primes.filter((prime) => q.chosen.has(prime.id));
+    const selectedCovered = new Set(selected.flatMap((prime) => prime.covers).filter((minterm) => q.ones.includes(minterm)));
+    const minimumCovered = new Set(primes.filter((prime) => q.optimal?.ids.has(prime.id)).flatMap((prime) => prime.covers).filter((minterm) => q.ones.includes(minterm)));
+    const isComplete = q.ones.every((minterm) => selectedCovered.has(minterm));
+    const selectedLiterals = selected.reduce((sum, prime) => sum + [...prime.bits].filter((bit) => bit !== '-').length, 0);
+    const isOptimal = isComplete && q.chosen.size === q.optimal?.ids.size && selectedLiterals === q.optimal?.literals;
     const table = document.createElement('table'); table.className = 'quine-table quine-cover-table';
     const head = document.createElement('thead'), hr = document.createElement('tr');
-    ['Prime implicant', 'Binary', ...q.ones.map((n) => String(n))].forEach((label) => { const th = document.createElement('th'); th.textContent = label; hr.append(th); });
+    ['Prime implicant', 'Binary', ...q.ones.map((n) => String(n))].forEach((label, index) => { const th = document.createElement('th'); th.textContent = label; if (index > 1) { const minterm = q.ones[index - 2]; if (selectedCovered.has(minterm)) th.classList.add('cover-column-selected'); if (q.revealOptimal && minimumCovered.has(minterm)) th.classList.add('cover-column-optimal'); } hr.append(th); });
     head.append(hr); table.append(head);
     const body = document.createElement('tbody');
     primes.forEach((prime) => {
-      const tr = document.createElement('tr'); tr.className = q.chosen.has(prime.id) ? 'chosen' : '';
-      const name = document.createElement('td'); const button = document.createElement('button'); button.type = 'button'; button.className = 'cover-pick'; button.setAttribute('aria-pressed', String(q.chosen.has(prime.id))); button.textContent = termName(prime.bits); button.addEventListener('click', () => { q.chosen.has(prime.id) ? q.chosen.delete(prime.id) : q.chosen.add(prime.id); renderCover(); }); name.append(button); tr.append(name);
+      const inMinimum = q.optimal?.ids.has(prime.id);
+      const tr = document.createElement('tr'); tr.className = [q.chosen.has(prime.id) ? 'chosen' : '', q.revealOptimal && inMinimum ? 'minimum-row' : ''].filter(Boolean).join(' ');
+      const name = document.createElement('td'); const button = document.createElement('button'); button.type = 'button'; button.className = 'cover-pick'; button.setAttribute('aria-pressed', String(q.chosen.has(prime.id))); button.textContent = termName(prime.bits); button.addEventListener('click', () => { q.chosen.has(prime.id) ? q.chosen.delete(prime.id) : q.chosen.add(prime.id); renderCover(); }); name.append(button); if (q.revealOptimal && inMinimum) { const badge = document.createElement('span'); badge.className = 'minimum-badge'; badge.textContent = 'Minimum'; name.append(badge); } tr.append(name);
       const binary = document.createElement('td'); binary.className = 'quine-code'; binary.textContent = prime.bits; tr.append(binary);
-      q.ones.forEach((n) => { const td = document.createElement('td'); td.className = prime.covers.includes(n) ? 'cover-hit' : 'cover-miss'; td.textContent = prime.covers.includes(n) ? '●' : '·'; td.setAttribute('aria-label', prime.covers.includes(n) ? `covers minterm ${n}` : `does not cover minterm ${n}`); tr.append(td); });
+      q.ones.forEach((n) => { const td = document.createElement('td'); td.className = [prime.covers.includes(n) ? 'cover-hit' : 'cover-miss', selectedCovered.has(n) ? 'cover-column-selected' : '', q.revealOptimal && inMinimum && prime.covers.includes(n) ? 'cover-column-optimal' : ''].filter(Boolean).join(' '); td.textContent = prime.covers.includes(n) ? '●' : '·'; td.setAttribute('aria-label', prime.covers.includes(n) ? `covers minterm ${n}` : `does not cover minterm ${n}`); tr.append(td); });
       body.append(tr);
     });
     table.append(body); $('quineCoverTable').replaceChildren(table);
     $('quineCoverMeta').textContent = `${primes.length} ${primes.length === 1 ? 'prime implicant' : 'prime implicants'}`;
+    $('quineCoverProgress').textContent = `Covered: ${selectedCovered.size} / ${q.ones.length} minterms`;
+    $('quineSelectedLegend').hidden = !q.chosen.size;
+    $('quineOptimalLegend').hidden = !q.revealOptimal;
+    const optimalButton = $('quineRevealOptimalButton');
+    optimalButton.textContent = isOptimal ? 'No need' : q.revealOptimal ? 'Hide minimum cover' : 'Show most efficient cover';
+    optimalButton.disabled = isOptimal;
+    optimalButton.title = isOptimal ? 'Your cover already uses the fewest implicants and literals.' : '';
+    $('quineOptimalSummary').hidden = !q.revealOptimal;
+    $('quineOptimalSummary').textContent = q.revealOptimal ? `One minimum cover uses ${q.optimal.ids.size} prime implicant${q.optimal.ids.size === 1 ? '' : 's'} and ${q.optimal.literals} literal${q.optimal.literals === 1 ? '' : 's'}. Your selection is unchanged.` : '';
     $('quineStep3').classList.add('current');
   };
   const startCover = () => {
     $('quineRoundPanel').hidden = true; $('quineCoverPanel').hidden = false;
-    q.chosen.clear(); $('quineResult').hidden = true; $('quineCoverMessage').textContent = 'Choose rows to cover every minterm.';
+    q.chosen.clear(); q.optimal = findMinimumCover(); q.revealOptimal = false; $('quineResult').hidden = true; $('quineCoverMessage').textContent = 'Choose rows to cover every minterm.';
     renderCover(); $('quineCoverPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const finishRound = () => {
@@ -118,7 +180,7 @@
       q.vars = vars; const max = 2 ** vars.length; const ones = parse($('quineMinterms').value, max), dcs = parse($('quineDontcares').value, max);
       if (!ones.length) throw new Error('Add at least one minterm where F = 1.');
       if (ones.some((n) => dcs.includes(n))) throw new Error('A minterm cannot also be a don’t-care.');
-      q.ones = ones; q.dcs = dcs; q.round = 0; q.rounds = [[]]; q.used = new Set(); q.primes = []; q.selected = []; q.chosen = new Set(); q.history = []; nextId = 0;
+      q.ones = ones; q.dcs = dcs; q.round = 0; q.rounds = [[]]; q.used = new Set(); q.primes = []; q.selected = []; q.chosen = new Set(); q.history = []; q.optimal = null; q.revealOptimal = false; nextId = 0;
       [...ones, ...dcs].sort((a, b) => a - b).forEach((n) => q.rounds[0].push(makeTerm(termBits(n), [n])));
       $('quineSetupMessage').className = 'input-message'; $('quineSetupMessage').textContent = `${vars.length} variables · ${max} possible minterms · ${ones.length} minterms${dcs.length ? ` · ${dcs.length} don’t-care${dcs.length === 1 ? '' : 's'}` : ''}`;
       $('quineRoundPanel').hidden = false; $('quineCoverPanel').hidden = true; $('quineStep1').classList.add('current'); $('quineStep2').classList.remove('current'); $('quineStep3').classList.remove('current'); say('Select a term to combine with a matching row, or mark an unpaired term as prime.'); renderRound();
@@ -139,13 +201,25 @@
   $('quinePrimeButton').addEventListener('click', () => { const term = q.rounds[q.round].find((row) => row.id === q.selected[0]); if (!term || canCombine(term, q.rounds[q.round])) return; q.primes.push(term); q.selected = []; say(`${term.bits} has no pair in this round. Marked as a prime implicant.`, true); renderRound(); });
   $('quineNextButton').addEventListener('click', finishRound);
   $('quineUndoButton').addEventListener('click', () => { const index = q.history.findLastIndex((entry) => entry.round === q.round); if (index < 0) return; q.history.splice(index, 1); q.used = new Set(); q.history.filter((h) => h.round === q.round).forEach((h) => h.parents.forEach((id) => q.used.add(id))); q.selected = []; say('Last combination removed.'); renderRound(); });
+  $('quineRevealOptimalButton').addEventListener('click', () => {
+    const covered = new Set(q.primes.filter((prime) => q.chosen.has(prime.id)).flatMap((prime) => prime.covers).filter((minterm) => q.ones.includes(minterm)));
+    const complete = q.ones.every((minterm) => covered.has(minterm));
+    const literals = q.primes.filter((prime) => q.chosen.has(prime.id)).reduce((sum, prime) => sum + [...prime.bits].filter((bit) => bit !== '-').length, 0);
+    if (complete && q.chosen.size === q.optimal.ids.size && literals === q.optimal.literals) return;
+    q.revealOptimal = !q.revealOptimal;
+    $('quineCoverMessage').className = 'input-message quine-good';
+    $('quineCoverMessage').textContent = q.revealOptimal ? 'Minimum cover highlighted. Your selection is unchanged.' : 'Minimum cover hidden. Continue comparing your selection.';
+    renderCover();
+  });
   $('quineCheckCoverButton').addEventListener('click', () => {
     const covered = new Set(q.primes.filter((p) => q.chosen.has(p.id)).flatMap((p) => p.covers).filter((n) => q.ones.includes(n)));
     const missing = q.ones.filter((n) => !covered.has(n)); const result = $('quineResult'); result.hidden = false;
     if (missing.length) { $('quineCoverMessage').className = 'input-message error'; $('quineCoverMessage').textContent = `Still uncovered: ${missing.join(', ')}. Add a prime implicant that covers each one.`; result.textContent = 'Keep going: every minterm needs to be covered at least once.'; result.className = 'quine-result'; return; }
     const expression = [...q.primes].filter((p) => q.chosen.has(p.id)).map((p) => termName(p.bits)).join(' + ');
-    $('quineCoverMessage').className = 'input-message quine-good'; $('quineCoverMessage').textContent = 'All minterms are covered.';
-    result.className = 'quine-result complete'; result.replaceChildren(); const label = document.createElement('span'); label.className = 'tiny-label'; label.textContent = 'YOUR COVER'; const output = document.createElement('strong'); output.textContent = `F = ${expression}`; const note = document.createElement('p'); note.textContent = `${q.chosen.size} prime implicant${q.chosen.size === 1 ? '' : 's'} selected. See whether you can reduce the cover further.`; result.append(label, output, note);
+    const literals = q.primes.filter((prime) => q.chosen.has(prime.id)).reduce((sum, prime) => sum + [...prime.bits].filter((bit) => bit !== '-').length, 0);
+    const optimal = q.chosen.size === q.optimal.ids.size && literals === q.optimal.literals;
+    $('quineCoverMessage').className = 'input-message quine-good'; $('quineCoverMessage').textContent = optimal ? 'Your cover is already most efficient.' : 'All minterms are covered. Compare with a minimum cover if you want to reduce it.';
+    result.className = 'quine-result complete'; result.replaceChildren(); const label = document.createElement('span'); label.className = 'tiny-label'; label.textContent = 'YOUR COVER'; const output = document.createElement('strong'); output.textContent = `F = ${expression}`; const note = document.createElement('p'); note.textContent = optimal ? `Minimum cover: ${q.chosen.size} prime implicant${q.chosen.size === 1 ? '' : 's'} and ${literals} literal${literals === 1 ? '' : 's'}.` : `${q.chosen.size} prime implicants and ${literals} literals. A minimum uses ${q.optimal.ids.size} implicant${q.optimal.ids.size === 1 ? '' : 's'} and ${q.optimal.literals} literal${q.optimal.literals === 1 ? '' : 's'}.`; result.append(label, output, note); renderCover();
   });
   $('quineResetButton').addEventListener('click', build);
   $('quineExampleButton').addEventListener('click', () => { $('quineVariables').value = 'a, b, c, d, e'; $('quineMinterms').value = '1, 3, 7, 9, 14, 15, 19, 20, 21, 25, 26, 27, 28, 29'; $('quineDontcares').value = '0, 11, 30, 31'; build(); });
