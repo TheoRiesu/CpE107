@@ -24,6 +24,17 @@
     if (new Set(nums).size !== nums.length) throw new Error('Enter each number only once.');
     return nums.sort((a, b) => a - b);
   };
+  const newRandomFiveProblem = () => {
+    const all = Array.from({ length: 32 }, (_, n) => n);
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+    const oneCount = 9 + Math.floor(Math.random() * 6);
+    const dcCount = $('quineRandomDcToggle').checked ? 2 + Math.floor(Math.random() * 4) : 0;
+    $('quineVariables').value = 'a, b, c, d, e';
+    $('quineMinterms').value = all.slice(0, oneCount).sort((a, b) => a - b).join(', ');
+    $('quineDontcares').value = all.slice(oneCount, oneCount + dcCount).sort((a, b) => a - b).join(', ');
+    build();
+    $('quineRoundPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const say = (message, good = false) => { $('quineActionMessage').textContent = message; $('quineActionMessage').className = `input-message${good ? ' quine-good' : ''}`; };
   const groupedTerms = (terms) => {
     const groups = new Map();
@@ -187,6 +198,7 @@
     } catch (error) { $('quineSetupMessage').className = 'input-message error'; $('quineSetupMessage').textContent = error.message; }
   };
   $('quineBuildButton').addEventListener('click', build);
+  $('quineRandomFiveButton').addEventListener('click', newRandomFiveProblem);
   $('quineCombineButton').addEventListener('click', () => {
     const terms = q.rounds[q.round], [a, b] = q.selected.map((id) => terms.find((term) => term.id === id)); if (!a || !b) return;
     const bits = comboPattern(a.bits, b.bits); if (!bits) { say('These terms must differ in exactly one bit, with dashes in the same places.'); return; }
