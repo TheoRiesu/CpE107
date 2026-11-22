@@ -128,10 +128,13 @@
   $('quineCombineButton').addEventListener('click', () => {
     const terms = q.rounds[q.round], [a, b] = q.selected.map((id) => terms.find((term) => term.id === id)); if (!a || !b) return;
     const bits = comboPattern(a.bits, b.bits); if (!bits) { say('These terms must differ in exactly one bit, with dashes in the same places.'); return; }
-    const covers = [...new Set([...a.covers, ...b.covers])].sort((x, y) => x - y); const duplicate = q.history.some((entry) => entry.round === q.round && entry.term.bits === bits && entry.term.covers.join(',') === covers.join(','));
-    if (duplicate) { say('You already made this combination in the current round.'); return; }
+    const covers = [...new Set([...a.covers, ...b.covers])].sort((x, y) => x - y);
+    const parentIds = [a.id, b.id].sort((x, y) => x - y);
+    const samePair = q.history.some((entry) => entry.round === q.round && entry.parents.slice().sort((x, y) => x - y).every((id, index) => id === parentIds[index]));
+    if (samePair) { say('You already combined these two terms. Their rows are marked Combined.'); return; }
+    const duplicate = q.history.some((entry) => entry.round === q.round && entry.term.bits === bits);
     q.used.add(a.id); q.used.add(b.id); const term = { bits, covers }; q.history.push({ round: q.round, term, parents: [a.id, b.id] }); q.selected = [];
-    say(`${a.bits} + ${b.bits} → ${bits}. The differing bit becomes a dash.`, true); renderRound();
+    say(duplicate ? `These terms also combine to ${bits}, which is already listed. Both rows are marked Combined.` : `${a.bits} + ${b.bits} → ${bits}. The differing bit becomes a dash.`, true); renderRound();
   });
   $('quinePrimeButton').addEventListener('click', () => { const term = q.rounds[q.round].find((row) => row.id === q.selected[0]); if (!term || canCombine(term, q.rounds[q.round])) return; q.primes.push(term); q.selected = []; say(`${term.bits} has no pair in this round. Marked as a prime implicant.`, true); renderRound(); });
   $('quineNextButton').addEventListener('click', finishRound);
